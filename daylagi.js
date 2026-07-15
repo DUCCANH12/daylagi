@@ -1,0 +1,338 @@
+(()=>{
+const style=document.createElement('style');
+style.textContent=`
+#cf2-popup{position:fixed;top:20px;left:50%;transform:translateX(-50%);width:850px;max-height:90vh;background:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.3);border-radius:12px;z-index:9999;font-family:Arial;display:flex;flex-direction:column;resize:both;overflow:auto}
+#cf2-popup .popup-header{cursor:move;display:flex;justify-content:space-between;align-items:center;padding:10px 15px;background:#f5f5f5;border-radius:12px 12px 0 0;user-select:none}
+#cf2-popup .popup-header h3{margin:0;font-size:16px;flex:1}
+#cf2-popup .popup-header .header-btns{display:flex;gap:5px}
+#cf2-popup .popup-header button{background:#ddd;border:none;font-size:18px;cursor:pointer;width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center}
+#cf2-popup.minimized .popup-body{display:none}
+#cf2-popup .tab-row{display:flex;border-bottom:1px solid #ddd}
+#cf2-popup .tab-btn{padding:8px 20px;cursor:pointer;background:#f5f5f5;border:none;font-size:14px;margin-right:2px}
+#cf2-popup .tab-btn.active{background:#fff;font-weight:bold;border:1px solid #ddd;border-bottom:1px solid #fff}
+#cf2-popup .tab-content{display:none;padding:15px;flex:1;overflow-y:auto}
+#cf2-popup .tab-content.active{display:block}
+#cf2-popup textarea{width:100%;height:60px;padding:10px;margin:10px 0;border:1px solid #ddd;border-radius:6px;resize:vertical;box-sizing:border-box}
+#cf2-popup input[type=number]{width:80px;padding:6px}
+#cf2-popup button.popup-action{background:#ee4d2d;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin:2px}
+#cf2-popup .result-item{margin:4px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#cf2-popup .link-text{flex:1;word-break:break-all}
+#cf2-popup .copy-btn{background:#007bff;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer}
+#cf2-popup .copy-all{background:#28a745;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin:2px}
+#cf2-popup .info-text{font-size:12px;color:#888}
+#cf2-popup .mode-row{display:flex;gap:20px;align-items:center;margin:8px 0}
+#cf2-popup .variant-btn{background:#6c757d;color:#fff;border:none;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px}
+.progress{font-size:13px;color:#555;margin:4px 0}
+.warning{color:#d9534f;font-weight:bold}
+.filter-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.filter-row label{font-size:13px}
+.filter-row input{width:60px;padding:4px}
+`;
+document.head.appendChild(style);
+
+const popup=document.createElement('div');
+popup.id='cf2-popup';
+popup.innerHTML=`
+<div class="popup-header" id="cf2-header">
+  <h3>🛍️ Săn Shopee (Flash Sale + Voucher)</h3>
+  <div class="header-btns">
+    <button id="cf2-minimize" title="Thu nhỏ / Mở rộng">–</button>
+    <button id="cf2-close" title="Đóng">✕</button>
+  </div>
+</div>
+<div class="popup-body">
+  <div class="tab-row">
+    <button class="tab-btn active" data-tab="flash">⚡ Flash Sale</button>
+    <button class="tab-btn" data-tab="voucher">🎫 Voucher</button>
+  </div>
+  <div class="tab-content active" id="flash-content">
+    <div class="mode-row">
+      <label><input type="radio" name="flash-mode" value="html" checked> Quét HTML</label>
+      <label><input type="radio" name="flash-mode" value="id"> Nhập Shop ID</label>
+      <label><input type="radio" name="flash-mode" value="category"> Category (cat.xxx)</label>
+    </div>
+    <textarea id="flash-input" placeholder="Nhập danh sách Shop ID hoặc Category ID (tùy chế độ)"></textarea>
+    <label>Giảm giá ≥ <input id="flash-min" type="number" value="70" min="0" max="99">%</label><br>
+    <label>Số shop tối đa <input id="flash-maxshop" type="number" value="10" min="1" max="50"></label><br>
+    <label><input type="checkbox" id="flash-ongoing"> Chỉ đang diễn ra</label><br>
+    <button id="flash-search" class="popup-action">🔍 Tìm Flash Sale</button>
+    <button id="flash-copyall" class="copy-all" style="display:none">📋 Copy tất cả</button>
+    <button id="flash-reset" style="background:#ffc107;color:#000;padding:8px 16px;border-radius:6px;border:none;cursor:pointer;margin:2px">🗑️ Reset đã quét</button>
+    <div id="flash-progress" class="progress"></div>
+    <div class="info-text" id="flash-info"></div>
+    <div id="flash-result"></div>
+  </div>
+  <div class="tab-content" id="voucher-content">
+    <div class="mode-row">
+      <label><input type="radio" name="vouch-mode" value="html" checked> Quét HTML</label>
+      <label><input type="radio" name="vouch-mode" value="id"> Nhập Shop ID</label>
+    </div>
+    <textarea id="vouch-input" placeholder="Nhập danh sách Shop ID (nếu chọn Nhập Shop ID)"></textarea>
+    <div class="filter-row">
+      <label>Giảm % ≥</label><input id="vouch-fpct" type="number" placeholder="%" min="0">
+      <label>Đơn tối thiểu ≥</label><input id="vouch-fmin" type="number" placeholder="k" min="0">
+      <label>Giảm tối đa ≥</label><input id="vouch-fcap" type="number" placeholder="k" min="0">
+      <label>Số shop tối đa</label><input id="vouch-maxshop" type="number" value="10" min="1" max="50">
+    </div>
+    <button id="vouch-search" class="popup-action">🔍 Lấy voucher</button>
+    <button id="vouch-copyall" class="copy-all" style="display:none">📋 Copy tất cả</button>
+    <button id="vouch-reset" style="background:#ffc107;color:#000;padding:8px 16px;border-radius:6px;border:none;cursor:pointer;margin:2px">🗑️ Reset đã quét</button>
+    <div id="vouch-progress" class="progress"></div>
+    <div class="info-text" id="vouch-info"></div>
+    <div id="vouch-result"></div>
+  </div>
+</div>`;
+document.body.appendChild(popup);
+
+// Drag & minimize logic (giữ nguyên)
+let isDragging=false,startX,startY,initialX,initialY;
+const header=document.getElementById('cf2-header');
+header.addEventListener('mousedown',(e)=>{
+  if(e.target.tagName==='BUTTON') return;
+  isDragging=true;
+  startX=e.clientX;startY=e.clientY;
+  const rect=popup.getBoundingClientRect();
+  initialX=rect.left;initialY=rect.top;
+  popup.style.transform='none';
+  popup.style.left=initialX+'px';popup.style.top=initialY+'px';
+  e.preventDefault();
+});
+document.addEventListener('mousemove',(e)=>{
+  if(!isDragging) return;
+  popup.style.left=(initialX+e.clientX-startX)+'px';
+  popup.style.top=(initialY+e.clientY-startY)+'px';
+});
+document.addEventListener('mouseup',()=>{isDragging=false;});
+document.getElementById('cf2-minimize').addEventListener('click',()=>{
+  popup.classList.toggle('minimized');
+  document.getElementById('cf2-minimize').textContent=popup.classList.contains('minimized')?'+':'–';
+});
+document.getElementById('cf2-close').addEventListener('click',()=>popup.remove());
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    this.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+    document.getElementById(this.dataset.tab+'-content').classList.add('active');
+  });
+});
+
+// ============== COMMON ==============
+const $=id=>document.getElementById(id);
+function getCsrfToken(){const m=document.cookie.match(/csrftoken=([^;]+)/);return m?m[1]:'';}
+function extractShopIdsFromHTML(){
+  const ids=new Set();
+  document.querySelectorAll('a[href*="i."], a[href*="/product/"], div.BlBXvx.J0nYy6 a[href]').forEach(a=>{
+    const href=a.href;if(!href)return;
+    let m=href.match(/i\.(\d+)\.(\d+)/);if(!m) m=href.match(/\/product\/(\d+)\/(\d+)/);
+    if(m) ids.add(m[1]);
+  });
+  return [...ids];
+}
+
+// ============== FLASH SALE ==============
+const FLASH_KEY='cf2_scanned_shops';
+let flashItems=[],flashAbort=null;
+function flashGetScanned(){try{return JSON.parse(localStorage.getItem(FLASH_KEY))||[];}catch(e){return[];}}
+function flashAddScanned(ids){const cur=flashGetScanned();const upd=[...new Set([...cur,...ids])];localStorage.setItem(FLASH_KEY,JSON.stringify(upd));return upd;}
+function flashReset(){localStorage.removeItem(FLASH_KEY);}
+function flashUpdateInfo(){const s=flashGetScanned();$('flash-info').textContent='Đã quét '+s.length+' shop (bỏ qua khi quét lại)';}
+function flashFormatPrice(v){const d=v/100000;if(d>=1000000)return (d/1000000).toFixed(1)+'tr';if(d>=1000)return (d/1000).toFixed(0)+'k';return d.toLocaleString('vi-VN');}
+function flashTruncName(n){return n.length>45?n.substring(0,45)+'..':n;}
+async function fetchModelNames(itemId,shopId,modelIds){
+  try{
+    const r=await fetch('https://shopee.vn/api/v4/item/get?itemid='+itemId+'&shopid='+shopId,{headers:{'x-requested-with':'XMLHttpRequest'},credentials:'include'});
+    if(!r.ok)return null;const j=await r.json();if(j.error)return null;
+    const models=j.data?.models;if(!models)return null;
+    const map={};models.forEach(m=>{map[m.modelid]=m.name;});
+    return modelIds.map(mid=>map[mid]||('Model '+mid)).join(', ');
+  }catch(e){return null;}
+}
+function flashRender(){
+  const d=$('flash-result');d.innerHTML='';
+  if(!flashItems.length){d.innerHTML='<p>Không có sản phẩm flash sale nào.</p>';$('flash-copyall').style.display='none';return;}
+  const now=Math.floor(Date.now()/1000);let h='';
+  flashItems.forEach(i=>{
+    const upcoming=i.start_time>now;let prefix='';
+    if(upcoming){const date=new Date(i.start_time*1000);prefix='- '+date.getHours()+'H'+date.getMinutes().toString().padStart(2,'0')+' ';}
+    const text=prefix+'-'+i.raw_discount+'% còn '+flashFormatPrice(i.price)+' - '+flashTruncName(i.name)+': '+i.link+' [SL: '+i.stock+']';
+    const mids=i.model_ids||[];const vbtn=mids.length>0?'<button class="variant-btn" data-itemid="'+i.itemid+'" data-shopid="'+i.shopid+'" data-models=\''+JSON.stringify(mids)+'\'>Phân loại</button>':'';
+    h+='<div class="result-item"><span class="link-text">'+text+'</span>'+vbtn+'<button class="copy-btn" data-text="'+text.replace(/"/g,'&quot;')+'">📋 Copy</button><span class="variant-info" style="font-size:12px;color:#555;margin-left:4px"></span></div>';
+  });
+  d.innerHTML=h;$('flash-copyall').style.display='block';
+  d.querySelectorAll('.copy-btn').forEach(b=>{b.onclick=()=>{navigator.clipboard.writeText(b.dataset.text).then(()=>{const o=b.textContent;b.textContent='✓';setTimeout(()=>b.textContent=o,1000);});};});
+  d.querySelectorAll('.variant-btn').forEach(b=>{b.onclick=async function(){const info=this.parentElement.querySelector('.variant-info');info.textContent='Đang tải...';const names=await fetchModelNames(this.dataset.itemid,this.dataset.shopid,JSON.parse(this.dataset.models));info.textContent=names||'Lỗi';};});
+}
+$('flash-copyall').onclick=()=>{
+  const now=Math.floor(Date.now()/1000);
+  const all=flashItems.map(i=>{const up=i.start_time>now;let p='';if(up){const d=new Date(i.start_time*1000);p='- '+d.getHours()+'H'+d.getMinutes().toString().padStart(2,'0')+' ';}return p+'-'+i.raw_discount+'% còn '+flashFormatPrice(i.price)+' - '+flashTruncName(i.name)+': '+i.link+' [SL: '+i.stock+']';}).join('\n');
+  navigator.clipboard.writeText(all).then(()=>{const o=$('flash-copyall').textContent;$('flash-copyall').textContent='✓ Đã copy';setTimeout(()=>$('flash-copyall').textContent=o,1500);});
+};
+$('flash-reset').onclick=()=>{if(confirm('Xóa lịch sử quét Flash Sale?')){flashReset();flashUpdateInfo();}};
+
+async function fetchFlashSale(shopId){
+  const ctrl=flashAbort;const r=await fetch('https://shopee.vn/api/v4/shop/get_shop_flash_sale_items?shopid='+shopId,{headers:{'x-requested-with':'XMLHttpRequest'},credentials:'include',signal:ctrl?ctrl.signal:undefined});
+  if(!r.ok){if(r.status===403||r.status===429)throw new Error('BLOCKED');return[];}
+  const j=await r.json();if(j.error!==0)return[];const sales=j.data?.flash_sales;if(!sales)return[];
+  const items=[];for(const s of sales){if(s.items){for(const it of s.items)items.push({...it,shopId,start_time:it.start_time||s.start_time,end_time:it.end_time||s.end_time,price:it.price||it.applied_product_promo_price||0,price_before_discount:it.price_before_discount||0,model_ids:it.model_ids||[]});}}
+  return items;
+}
+
+$('flash-search').onclick=async()=>{
+  const mode=document.querySelector('input[name="flash-mode"]:checked').value;
+  const input=$('flash-input').value.trim();
+  const min=parseInt($('flash-min').value)||70;
+  const maxShop=parseInt($('flash-maxshop').value)||10;
+  const ongoing=$('flash-ongoing').checked;const now=Math.floor(Date.now()/1000);
+  const prog=$('flash-progress');prog.innerHTML='';flashItems=[];$('flash-copyall').style.display='none';flashAbort=new AbortController();flashUpdateInfo();
+  let shopIds=[];
+  if(mode==='html'){
+    prog.innerHTML='Đang quét HTML...';const all=extractShopIdsFromHTML();
+    if(!all.length){prog.innerHTML='<p style="color:red">Không tìm thấy shop.</p>';return;}
+    const scanned=flashGetScanned();const newIds=all.filter(id=>!scanned.includes(id));
+    if(!newIds.length){prog.innerHTML='Tất cả shop đã quét.';return;}
+    shopIds=newIds.slice(0,maxShop);prog.innerHTML='Tìm thấy '+all.length+' shop, '+newIds.length+' mới. Quét '+shopIds.length+' shop.';
+  }else if(mode==='id'){
+    if(!input||!/^[\d\s,]+$/.test(input)){prog.innerHTML='<p style="color:red">Danh sách ID không hợp lệ.</p>';return;}
+    shopIds=input.split(/[\s,]+/).filter(id=>/^\d+$/.test(id));
+    const scanned=flashGetScanned();shopIds=shopIds.filter(id=>!scanned.includes(id));
+    if(!shopIds.length){prog.innerHTML='Tất cả shop đã quét.';return;}
+    shopIds=shopIds.slice(0,maxShop);prog.innerHTML='Dùng '+shopIds.length+' shop nhập tay.';
+  }else if(mode==='category'){
+    const referer=location.href;let catId=input;
+    if(!catId){const m=referer.match(/cat\.(\d+)/);if(m)catId=m[1];else{prog.innerHTML='<p style="color:red">Không tìm thấy Category ID.</p>';return;}}
+    if(!referer.includes('cat.')){prog.innerHTML='<p style="color:red">Phải đứng ở trang category.</p>';return;}
+    prog.innerHTML='Đang lấy shop từ category '+catId+'...';
+    try{
+      const ids=await (async()=>{const set=new Set();let off=0,lim=60;
+      while(true){
+        const r=await fetch('https://shopee.vn/api/v4/recommend/recommend_v2',{method:'POST',headers:{'content-type':'application/json','x-requested-with':'XMLHttpRequest','x-api-source':'pc','x-csrftoken':getCsrfToken(),Referer:referer},credentials:'include',body:JSON.stringify({catid:parseInt(catId),limit:lim,offset:off,bundle:'category_landing_page',cat_level:1,need_dynamic_translation:true})});
+        if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();if(j.error)throw new Error(j.error_msg);
+        const data=j.data;if(!data||!data.units)break;
+        for(const u of data.units){const sid=u.item?.item_data?.shopid;if(sid)set.add(sid);}
+        const total=data.total||0;off+=lim;prog.innerHTML='Đã quét '+off+'/'+total+' sản phẩm...';
+        if(off>=total)break;
+        await new Promise(r=>setTimeout(r,2000+Math.random()*3000));
+      }return [...set];})();
+      const scanned=flashGetScanned();const newShops=ids.filter(id=>!scanned.includes(id));
+      if(!newShops.length){prog.innerHTML='Tất cả shop đã quét.';return;}
+      shopIds=newShops.slice(0,maxShop);prog.innerHTML='Lấy '+shopIds.length+' shop mới.';
+    }catch(e){prog.innerHTML='<p style="color:red">Lỗi: '+e.message+'</p>';return;}
+  }
+  prog.innerHTML+='<br>Đang quét Flash Sale...';let collected=[];
+  for(let i=0;i<shopIds.length;i++){
+    if(flashAbort.signal.aborted)break;
+    const sid=shopIds[i];prog.innerHTML='Shop '+sid+' ('+(i+1)+'/'+shopIds.length+')...';
+    try{
+      const items=await fetchFlashSale(sid);
+      let filtered=items.filter(it=>it.raw_discount>=min);
+      if(ongoing) filtered=filtered.filter(it=>it.start_time<=now&&it.end_time>=now);
+      collected.push(...filtered);
+    }catch(e){
+      if(e.message==='BLOCKED'){prog.innerHTML='<br><span class="warning">🚫 Bị chặn (403/429). Dừng lại. Hãy đợi 15-30 phút hoặc đổi IP.</span>';break;}
+      else prog.innerHTML+='<br><span style="color:red">Lỗi shop '+sid+': '+e.message+'</span>';
+    }
+    if(i<shopIds.length-1&&!flashAbort.signal.aborted){
+      const delay=3000+Math.floor(Math.random()*4000);prog.innerHTML='Chờ '+(delay/1000).toFixed(1)+'s...';
+      await new Promise(r=>setTimeout(r,delay));
+      if((i+1)%5===0){const long=15000+Math.floor(Math.random()*10000);prog.innerHTML='Nghỉ dài '+(long/1000).toFixed(0)+'s sau 5 shop...';await new Promise(r=>setTimeout(r,long));}
+    }
+  }
+  if(!flashAbort.signal.aborted){flashAddScanned(shopIds);flashUpdateInfo();}
+  flashItems=collected.sort((a,b)=>b.raw_discount-a.raw_discount);
+  prog.innerHTML='Đã quét '+shopIds.length+' shop, tìm thấy '+flashItems.length+' SP ≥ '+min+'%'+(ongoing?' (đang diễn ra)':'')+'.';
+  flashItems=flashItems.map(it=>({...it,link:'https://shopee.vn/product/'+(it.shopid||it.shop_id)+'/'+(it.itemid||it.item_id),stock:it.stock||0}));
+  flashRender();
+};
+
+// ============== VOUCHER ==============
+const VOUCH_KEY='vcat_scanned_shops';
+let vouchVouchers=[];
+function vouchGetScanned(){try{return JSON.parse(localStorage.getItem(VOUCH_KEY))||[];}catch(e){return[];}}
+function vouchAddScanned(ids){const cur=vouchGetScanned();const upd=[...new Set([...cur,...ids])];localStorage.setItem(VOUCH_KEY,JSON.stringify(upd));return upd;}
+function vouchReset(){localStorage.removeItem(VOUCH_KEY);}
+function vouchUpdateInfo(){const s=vouchGetScanned();$('vouch-info').textContent='Đã quét '+s.length+' shop (bỏ qua khi quét lại)';}
+const vToK=v=>Math.round(v/100000000);
+const vFormatK=v=>{const num=v/100000;if(num>=1000000)return (num/1000000).toFixed(1)+'tr';if(num>=1000)return (num/1000).toFixed(0)+'k';return num.toLocaleString('vi-VN');};
+function vIsPercent(v){return v.reward_percentage>0||v.reward_type===1;}
+
+function vouchRender(){
+  const fpct=parseFloat($('vouch-fpct').value)||0;
+  const fminRaw=$('vouch-fmin').value.trim();const fmin=(fminRaw!==''&&!isNaN(parseFloat(fminRaw)))?parseFloat(fminRaw):null;
+  const fcap=parseFloat($('vouch-fcap').value)||0;
+  const d=$('vouch-result');d.innerHTML='';
+  const filtered=vouchVouchers.filter(v=>{
+    const pct=vIsPercent(v);
+    if(pct){if(fpct>0&&v.reward_percentage<fpct)return false;if(fcap>0&&vToK(v.reward_cap)<fcap)return false;}
+    else{if(fcap>0&&vToK(v.reward_value)<fcap)return false;}
+    if(fmin!==null){if(fmin===0){if(v.min_spend!==0)return false;}else{if(v.min_spend===0)return false;if(vToK(v.min_spend)<fmin)return false;}}
+    return true;
+  });
+  if(!filtered.length){d.innerHTML='<p>Không có voucher khớp.</p>';$('vouch-copyall').style.display='none';return;}
+  let h='';filtered.forEach(v=>{
+    let desc;if(vIsPercent(v))desc='giảm '+v.reward_percentage+'% max '+vFormatK(v.reward_cap)+'/'+(v.min_spend>0?vFormatK(v.min_spend):'0đ');
+    else desc='giảm '+vFormatK(v.reward_value)+'/'+(v.min_spend>0?vFormatK(v.min_spend):'0đ');
+    const link='https://shopee.vn/search?promotionId='+v.promotionid+'&signature='+v.signature+'&voucherCode='+v.voucher_code;
+    const text=v.voucher_code+' '+desc+' áp list: '+link;
+    h+='<div class="vitem" style="margin:6px 0;display:flex;align-items:center;flex-wrap:wrap"><span class="vtext" style="flex:1;word-break:break-all">'+text+'</span><button class="copybtn" data-text="'+text.replace(/"/g,'&quot;')+'" style="background:#007bff;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;margin-left:8px">📋 Copy</button></div>';
+  });
+  d.innerHTML=h;$('vouch-copyall').style.display='block';
+  d.querySelectorAll('.copybtn').forEach(b=>{b.onclick=()=>{navigator.clipboard.writeText(b.dataset.text).then(()=>{const o=b.textContent;b.textContent='✓';setTimeout(()=>b.textContent=o,1000);});};});
+}
+$('vouch-copyall').onclick=()=>{
+  const texts=Array.from(document.querySelectorAll('#vouch-result .vtext')).map(el=>el.textContent).join('\n');
+  navigator.clipboard.writeText(texts).then(()=>{const o=$('vouch-copyall').textContent;$('vouch-copyall').textContent='✓ Đã copy';setTimeout(()=>$('vouch-copyall').textContent=o,1500);});
+};
+['vouch-fpct','vouch-fmin','vouch-fcap'].forEach(id=>$(id).addEventListener('input',vouchRender));
+$('vouch-reset').onclick=()=>{if(confirm('Xóa lịch sử quét Voucher?')){vouchReset();vouchUpdateInfo();}};
+
+async function fetchVouchersForShop(shopId){
+  try{
+    const r=await fetch('https://shopee.vn/api/v4/shop/get_shop_tab',{method:'POST',headers:{'content-type':'application/json','x-requested-with':'XMLHttpRequest','x-api-source':'pc'},credentials:'include',body:JSON.stringify({entry_point:'ShopByPDP',rcmd_condition:{cat_id:0,item_id:0,upstream:'pdp'},shopid:parseInt(shopId)})});
+    if(!r.ok)return[];const j=await r.json();if(j.error!==0)return[];
+    const deco=j.data?.decoration;if(!deco)return[];const comp=deco.find(d=>d.type===303&&d.shop_voucher);
+    if(!comp)return[];return comp.shop_voucher.voucher_list.map(v=>({...v,shopId}));
+  }catch(e){return[];}
+}
+
+$('vouch-search').onclick=async()=>{
+  const mode=document.querySelector('input[name="vouch-mode"]:checked').value;
+  const input=$('vouch-input').value.trim();
+  const maxShop=parseInt($('vouch-maxshop').value)||10;
+  const prog=$('vouch-progress');prog.innerHTML='';vouchVouchers=[];$('vouch-copyall').style.display='none';vouchUpdateInfo();
+  let shopIds=[];
+  if(mode==='html'){
+    prog.innerHTML='Đang quét HTML...';const all=extractShopIdsFromHTML();
+    if(!all.length){prog.innerHTML='<p style="color:red">Không tìm thấy shop.</p>';return;}
+    const scanned=vouchGetScanned();const newIds=all.filter(id=>!scanned.includes(id));
+    if(!newIds.length){prog.innerHTML='Tất cả shop đã quét.';return;}
+    shopIds=newIds.slice(0,maxShop);prog.innerHTML='Tìm thấy '+all.length+' shop, '+newIds.length+' mới. Quét '+shopIds.length+' shop.';
+  }else if(mode==='id'){
+    if(!input||!/^[\d\s,]+$/.test(input)){prog.innerHTML='<p style="color:red">Danh sách ID không hợp lệ.</p>';return;}
+    shopIds=input.split(/[\s,]+/).filter(id=>/^\d+$/.test(id));
+    const scanned=vouchGetScanned();shopIds=shopIds.filter(id=>!scanned.includes(id));
+    if(!shopIds.length){prog.innerHTML='Tất cả shop đã quét.';return;}
+    shopIds=shopIds.slice(0,maxShop);prog.innerHTML='Dùng '+shopIds.length+' shop nhập tay.';
+  }
+  prog.innerHTML+='<br>Đang lấy voucher...';let errors=[];
+  for(let i=0;i<shopIds.length;i++){
+    const sid=shopIds[i];prog.innerHTML='Shop '+sid+' ('+(i+1)+'/'+shopIds.length+')...';
+    try{const vouchers=await fetchVouchersForShop(sid);vouchVouchers.push(...vouchers);}
+    catch(e){errors.push('Shop '+sid+': '+e.message);}
+    if(i<shopIds.length-1){
+      const delay=3000+Math.floor(Math.random()*4000);prog.innerHTML='Chờ '+(delay/1000).toFixed(1)+'s...';
+      await new Promise(r=>setTimeout(r,delay));
+      if((i+1)%5===0){const long=15000+Math.floor(Math.random()*10000);prog.innerHTML='Nghỉ dài '+(long/1000).toFixed(0)+'s sau 5 shop...';await new Promise(r=>setTimeout(r,long));}
+    }
+  }
+  vouchAddScanned(shopIds);vouchUpdateInfo();
+  if(errors.length) prog.innerHTML+='<br><span style="color:red">'+errors.join('<br>')+'</span>';
+  if(!vouchVouchers.length){prog.innerHTML+='<br>Không tìm thấy voucher.';}
+  else{prog.innerHTML='Đã lấy '+vouchVouchers.length+' voucher từ '+shopIds.length+' shop.';vouchRender();}
+};
+
+// Initial info update
+flashUpdateInfo();vouchUpdateInfo();
+})();
